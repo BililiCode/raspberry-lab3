@@ -20,7 +20,7 @@ print(f"Available device: {device}")
 # input_size = 784    # 28 x 28, flattened to be 1-D tensor
 # hidden_size = 100
 num_classes = 10
-num_epochs = 20
+num_epochs = 1
 batch_size = 32
 learning_rate = 0.0012
 
@@ -139,13 +139,6 @@ class LeNet5(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
 
-model = LeNet5().to(device=device)
-
-# Define loss and optimizer-
-loss = nn.CrossEntropyLoss()  # applies softmax for us
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
-
 def count_params(model):
     tot_params = 0
     for layer_name, param in model.named_parameters():
@@ -192,8 +185,10 @@ def test_model(model, test_loader):
     total = 0.0
     correct = 0.0
     running_loss_val = 0.0
+    latency = 0.0
 
     with torch.no_grad():
+
         for images, labels in test_loader:
             # Place features (images) and targets (labels) to GPU-
             # images = images.reshape(-1, input_size).to(device)
@@ -204,14 +199,18 @@ def test_model(model, test_loader):
             # Set model to evaluation mode-
             model.eval()
 
-            # Make predictions using trained model-
+            # Make predictions using trained model
+            x = time.time()
             outputs = model(images)
+            x1 = time.time()
+            latency += (x1 - x)
+
             _, y_pred = torch.max(outputs, 1)
 
             # Compute validation loss-
-            J_val = loss(outputs, labels)
+            # J_val = loss(outputs, labels)
 
-            running_loss_val += J_val.item() * labels.size(0)
+            # running_loss_val += J_val.item() * labels.size(0)
 
             # Total number of labels-
             total += labels.size(0)
@@ -219,97 +218,11 @@ def test_model(model, test_loader):
             # Total number of correct predictions-
             correct += (y_pred == labels).sum()
 
+
+    print(latency)
+
     return (running_loss_val, correct, total)
 
-
-# User input parameters for Early Stopping in manual implementation-
-# minimum_delta = 0.001
-# patience = 3
-#
-# # Initialize parameters for Early Stopping manual implementation-
-# best_val_loss = 100
-# loc_patience = 0
-#
-# # Python3 lists to store model training metrics-
-# training_acc = []
-# validation_acc = []
-# training_loss = []
-# validation_loss = []
-#
-# # Training loop-
-# for epoch in range(num_epochs):
-#     running_loss = 0.0
-#     running_corrects = 0.0
-#
-#     if loc_patience >= patience:
-#         print("\n'EarlyStopping' called!\n")
-#         break
-#
-#     running_loss, running_corrects = train_model(model, train_loader)
-#
-#     # Compute training loss and accuracy for one epoch-
-#     epoch_loss = running_loss / len(train_dataset)
-#     epoch_acc = running_corrects.double() / len(train_dataset)
-#     # epoch_acc = 100 * running_corrects / len(trainset)
-#     # print(f"\nepoch: {epoch + 1} training loss = {epoch_loss:.4f}, training accuracy = {epoch_acc * 100:.2f}%\n")
-#
-#     running_loss_val, correct, total = test_model(model, test_loader)
-#
-#     # Compute validation loss and accuracy-
-#     epoch_val_loss = running_loss_val / len(test_dataset)
-#     val_acc = 100 * (correct / total)
-#     # print(f"\nepoch: {epoch + 1} training loss = {epoch_loss:.4f}, training accuracy = {epoch_acc * 100:.2f}%, val_loss = {epoch_val_loss:.4f} & val_accuracy = {val_acc:.2f}%\n")
-#
-#     print(
-#         f"\nepoch: {epoch + 1} training loss = {epoch_loss:.4f}, training accuracy = {epoch_acc * 100:.2f}%, val_loss = {epoch_val_loss:.4f} & val_accuracy = {val_acc:.2f}%\n")
-#
-#     # Code for manual Early Stopping:
-#     # if np.abs(epoch_val_loss < best_val_loss) >= minimum_delta:
-#     if (epoch_val_loss < best_val_loss) and np.abs(epoch_val_loss - best_val_loss) >= minimum_delta:
-#         # print(f"epoch_val_loss = {epoch_val_loss:.4f}, best_val_loss = {best_val_loss:.4f}")
-#
-#         # update 'best_val_loss' variable to lowest loss encountered so far-
-#         best_val_loss = epoch_val_loss
-#
-#         # reset 'loc_patience' variable-
-#         loc_patience = 0
-#
-#         print(f"Saving model with lowest val_loss = {epoch_val_loss:.4f}\n")
-#
-#         # Save trained model with validation accuracy-
-#         # torch.save(model.state_dict, f"LeNet-300-100_Trained_{val_acc}.pth")
-#         torch.save(model.state_dict(), "LeNet-4_Trained.pth")
-#
-#     else:  # there is no improvement in monitored metric 'val_loss'
-#         loc_patience += 1  # number of epochs without any improvement
-#
-#     training_acc.append(epoch_acc * 100)
-#     validation_acc.append(val_acc)
-#     training_loss.append(epoch_loss)
-#     validation_loss.append(epoch_val_loss)
-
-########################
-
-best_model = LeNet5().to(device=device)
-best_model.load_state_dict(torch.load(
-    "./LeNet-4_Trained.pth"))
-
-loss = nn.CrossEntropyLoss()  # applies softmax for loss function
-optimizer = torch.optim.Adam(best_model.parameters(), lr=learning_rate)
-
-print(f"number of non-zero parameter in unpruned LeNet-4 CNN = {count_params(best_model)}")
-
-running_loss_val, correct, total = test_model(best_model, test_loader)
-
-# Compute validation loss and accuracy-
-val_loss = running_loss_val / len(test_dataset)
-val_acc = 100 * (correct / total)
-
-print("Best trained LeNet-4 metrics on validation dataset:")
-print(f"val_loss = {val_loss:.4f} & val_acc = {val_acc:.2f}%")
-
-
-#######################
 
 def compute_sparsity(best_model):
     conv1_sparsity = (torch.sum(best_model.conv1.weight == 0) / best_model.conv1.weight.nelement()) * 100
@@ -349,6 +262,24 @@ prune p% of smallest magnitude weights in a structured layer-wise manner
 fine-tune pruned model to recover performance
 '''
 
+best_model = LeNet5().to(device=device)
+best_model.load_state_dict(torch.load(
+    "./LeNet-4_Trained.pth"))
+
+loss = nn.CrossEntropyLoss()  # applies softmax for loss function
+optimizer = torch.optim.Adam(best_model.parameters(), lr=learning_rate)
+
+print(f"number of non-zero parameter in unpruned LeNet-4 CNN = {count_params(best_model)}")
+
+running_loss_val, correct, total = test_model(best_model, test_loader)
+
+# Compute validation loss and accuracy-
+val_loss = running_loss_val / len(test_dataset)
+val_acc = 100 * (correct / total)
+
+print("Best trained LeNet-4 metrics on validation dataset:")
+print(f"val_loss = {val_loss:.4f} & val_acc = {val_acc:.2f}%")
+
 # User input parameters for Early Stopping in manual implementation-
 minimum_delta = 0.001
 patience = 3
@@ -357,15 +288,25 @@ patience = 3
 best_val_loss = 100
 loc_patience = 0
 history = {}
+state = 'training'  # if you want see the inference latency of pruned, please change the 'training' to 'inference'
+
+start = time.time()
+running_loss_val, correct, total = test_model(best_model, test_loader)
+end = time.time()
+latency = end - start
+
+print("latency:", latency)
 ########iterative pruning the model
+
+
 for iter_prune_round in range(10):
     print(f"\n\nIterative Global pruning round = {iter_prune_round + 1}")
 
     # Prune layer-wise in a structured manner-
-    prune.ln_structured(best_model.conv1, name="weight", amount=0.1, n=2, dim=0)
-    prune.ln_structured(best_model.conv2, name="weight", amount=0.1, n=2, dim=0)
-    prune.ln_structured(best_model.conv3, name="weight", amount=0.1, n=2, dim=0)
-    prune.ln_structured(best_model.op, name="weight", amount=0.1, n=2, dim=0)
+    prune.ln_structured(best_model.conv1, name="weight", amount=0.3, n=2, dim=0)  # amount is the pruning ratio
+    prune.ln_structured(best_model.conv2, name="weight", amount=0.3, n=2, dim=0)
+    prune.ln_structured(best_model.conv3, name="weight", amount=0.3, n=2, dim=0)
+    prune.ln_structured(best_model.op, name="weight", amount=0.3, n=2, dim=0)
 
     # Print current global sparsity level-
     print(f"LeNet-5 global sparsity = {compute_sparsity(best_model):.2f}%")
@@ -390,28 +331,10 @@ for iter_prune_round in range(10):
         # Compute training loss and accuracy for one epoch-
         epoch_loss = running_loss / len(train_dataset)
         epoch_acc = running_corrects.double() / len(train_dataset)
-        start = time.time()
+
         running_loss_val, correct, total = test_model(best_model, test_loader)
-        end = time.time()
-        latency = end - start
 
-        print("latency:", latency)
-
-        # start = time.time()
-
-        # if you want to remove the zero for the model
-        # prune.remove(best_model.conv1, name='weight')
-        # prune.remove(best_model.conv2, name='weight')
-        # prune.remove(best_model.conv3, name='weight')
-        # prune.remove(best_model.op, name='weight')
-
-        # _, _, _ = test_model(best_model, test_loader)
-        # end = time.time()
-        # latency = end - start
-
-        print("after pruning latency:", latency)
-
-        # Compute validation loss and accuracy-
+        # Compute validation loss and accuracy
         epoch_val_loss = running_loss_val / len(test_dataset)
         val_acc = 100 * (correct / total)
 
@@ -424,7 +347,7 @@ for iter_prune_round in range(10):
             # update 'best_val_loss' variable to lowest loss encountered so far-
             best_val_loss = epoch_val_loss
 
-            # reset 'loc_patience' variable-
+            # reset 'loc_patience' variable
             loc_patience = 0
 
             print(
@@ -441,6 +364,21 @@ for iter_prune_round in range(10):
         else:  # there is no improvement in monitored metric 'val_loss'
             loc_patience += 1  # number of epochs without any improvement
 
+    # if you want to get the latency of pruned model for the inference stage, please remove the comment.
+    #  reference: https://pytorch.org/docs/stable/generated/torch.nn.utils.prune.remove.html#torch.nn.utils.prune.remove
+    if state == 'inference':
+        start = time.time()
+        best_model.conv1 = prune.remove(best_model.conv1, name='weight')
+        best_model.conv2 = prune.remove(best_model.conv2, name='weight')
+        best_model.conv3 = prune.remove(best_model.conv3, name='weight')
+        best_model.op = prune.remove(best_model.op, name='weight')
+
+        _, _, _ = test_model(best_model, test_loader)
+        end = time.time()
+        latency = end - start
+
+        print("after pruning latency:", latency)
+
 ####Visualize training metrics:
 # Python3 dict for training accuracy-
 plot_acc = {}
@@ -454,16 +392,7 @@ for epoch in history.keys():
     sparsity = history[epoch]['sparsity'].item()
     plot_val_acc[sparsity] = history[epoch]['best_val_acc'].item()
 
-# Visualization of training accuracy VS percentage of weights pruned-
-fig = plt.figure(figsize=(10, 7), dpi=80, facecolor='w', edgecolor='k')
 
-plt.plot(list(plot_acc.keys()), list(plot_acc.values()), label='training accuracy')
-plt.plot(list(plot_val_acc.keys()), list(plot_val_acc.values()), label='validation accuracy')
-
-plt.title("LeNet-4 CNN - Structured layer-wise pruning: sparsity (%) vs. accuracy")
-plt.xlabel("global % weights pruned")
-plt.ylabel("Accuracy")
-plt.legend()
 
 for epoch in history.keys():
     print(
