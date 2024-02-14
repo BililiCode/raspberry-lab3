@@ -303,10 +303,10 @@ for iter_prune_round in range(10):
     print(f"\n\nIterative Global pruning round = {iter_prune_round + 1}")
 
     # Prune layer-wise in a structured manner-
-    prune.ln_structured(best_model.conv1, name="weight", amount=0.3, n=2, dim=0)  # amount is the pruning ratio
-    prune.ln_structured(best_model.conv2, name="weight", amount=0.3, n=2, dim=0)
-    prune.ln_structured(best_model.conv3, name="weight", amount=0.3, n=2, dim=0)
-    prune.ln_structured(best_model.op, name="weight", amount=0.3, n=2, dim=0)
+    prune.ln_structured(best_model.conv1, name="weight", amount=0.1, n=2, dim=0)  # amount is the pruning ratio
+    prune.ln_structured(best_model.conv2, name="weight", amount=0.1, n=2, dim=0)
+    prune.ln_structured(best_model.conv3, name="weight", amount=0.1, n=2, dim=0)
+    prune.ln_structured(best_model.op, name="weight", amount=0.1, n=2, dim=0)
 
     # Print current global sparsity level-
     print(f"LeNet-5 global sparsity = {compute_sparsity(best_model):.2f}%")
